@@ -34,11 +34,14 @@ def upload_resume():
     
     try:
         text = parser.extract_text(filepath)
-        structured = parser.get_structured_data(text)
+        # Use intel to get a better profile than the basic parser
+        profile = intel.extract_search_profile(text)
         return jsonify({
             "resume_text": text,
-            "suggested_query": structured.get("search_query"),
-            "location": structured.get("location")
+            "suggested_queries": profile.get("queries", []),
+            "suggested_query": profile.get("queries", ["Senior Functional Safety Engineer"])[0],
+            "primary_title": profile.get("primary_title"),
+            "location": profile.get("location", "USA")
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -63,7 +63,14 @@
                     </h2>
                     <div style="margin-top: 1rem;">
                         <input type="text" id="queryInput" placeholder="Optimizing search query..."
-                            style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); padding: 1.25rem; border-radius: 1rem; color: white; margin-bottom: 1.25rem; font-weight: 600;">
+                            style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); padding: 1.25rem; border-radius: 1rem; color: white; margin-bottom: 1rem; font-weight: 600;">
+
+                        <div id="suggestionsBox" class="hidden" style="margin-bottom: 1.5rem;">
+                            <p
+                                style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">
+                                AI Career Paths:</p>
+                            <div id="suggestionsContainer" class="tag-list"></div>
+                        </div>
 
                         <button class="btn-primary" id="scoutBtn">
                             <i class="fas fa-bullseye"></i> Start Global Scan
@@ -145,17 +152,32 @@
             try {
                 const res = await axios.post('/api/upload_resume', formData);
                 currentResumeText = res.data.resume_text;
+
+                // Render suggestions
+                const queries = res.data.suggested_queries || [];
+                const suggestionsHtml = queries.map(q => `
+                    <span class="mini-tag" style="cursor:pointer; padding: 0.5rem 1rem; border-color: var(--accent-primary);"
+                          onclick="selectQuery('${q.replace(/'/g, "\\'")}')">
+                        ${q}
+                    </span>
+                `).join('');
+
+                document.getElementById('suggestionsContainer').innerHTML = suggestionsHtml;
+                document.getElementById('suggestionsBox').classList.remove('hidden');
+
                 queryInput.value = res.data.suggested_query || "";
                 resumeInfo.classList.remove('hidden');
                 dropZone.style.opacity = "0.5";
-
-                // One-click behavior: Start scouting automatically after upload
-                setTimeout(() => scoutBtn.click(), 500);
             } catch (err) {
                 alert("Deep analysis failed: " + err.message);
             } finally {
                 loader.classList.add('hidden');
             }
+        }
+
+        function selectQuery(q) {
+            queryInput.value = q;
+            scoutBtn.click();
         }
 
         // Core Interaction: Scouting

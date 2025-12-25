@@ -125,9 +125,9 @@ class JobIntelligence:
             return {"score": 0, "verdict": "Match analysis failed.", "strengths": [], "gaps": []}
 
     def extract_search_profile(self, resume_text: str) -> Dict[str, Any]:
-        """Analyzes a resume to determine best search query."""
+        """Analyzes a resume to extract multiple optimized job search queries."""
         resume_hash = hashlib.md5(resume_text.encode()).hexdigest()
-        cache_key = f"profile_{resume_hash}"
+        cache_key = f"profile_v2_{resume_hash}"
         
         cached_data = self.cache.get(cache_key)
         if cached_data:
@@ -135,9 +135,21 @@ class JobIntelligence:
 
         if not self.client:
             logger.warning("No Gemini client to extract search profile. Using generic fallback.")
-            return {"query": "Senior Functional Safety Engineer", "location": "USA"}
+            return {"queries": ["Senior Functional Safety Engineer", "Safety Systems Architect", "ISO 26262 Engineer"], "location": "USA"}
 
-        prompt = f"Identify the BEST job search query (3-5 words) and location from this resume: {resume_text[:3000]}. Return JSON ONLY: {{ 'query': '...', 'location': '...' }}"
+        prompt = f"""
+        Analyze this resume and generate a recruitment profile.
+        RESUME: {resume_text[:4000]}
+        
+        Tasks:
+        1. Identify the candidate's exact current/past job titles.
+        2. Generate 5-7 highly specific "Optimized Search Queries" (3-5 words each) that would find high-paying matching jobs on LinkedIn/Indeed. 
+           - Include variations of their current role.
+           - Include roles they are qualified to "step up" into.
+        3. Suggest the most likely preferred location (Default to 'USA').
+        
+        Return JSON ONLY: {{ "queries": ["query 1", "query 2", ...], "location": "...", "primary_title": "..." }}
+        """
         
         try:
             response = self.client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
@@ -147,4 +159,4 @@ class JobIntelligence:
             return result
         except Exception as e:
             logger.error(f"Search profile extraction failed: {e}")
-            return {"query": "Senior Functional Safety Engineer", "location": "USA"}
+            return {"queries": ["Senior Functional Safety Engineer"], "location": "USA"}
