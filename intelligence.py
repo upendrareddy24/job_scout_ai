@@ -55,15 +55,15 @@ class JobIntelligence:
             logger.error("Perplexity API key missing.")
             return []
 
-        prompt = f"Find top 10 USA job openings for: '{search_query}'. Return ONLY JSON list: [{{'title': '...', 'company': '...', 'location': '...', 'url': '...', 'requirements': '...'}}]"
+        prompt = f"Find top 10 USA job openings for: '{search_query}'. Return ONLY JSON list of objects. Format: [{{'title': '...', 'company': '...', 'location': '...', 'url': '...', 'requirements': '...'}}]"
 
         payload = {
-            "model": "llama-3.1-sonar-small-128k-online",
+            "model": "sonar",
             "messages": [
                 {"role": "system", "content": "You are a career scout. Return ONLY JSON."},
                 {"role": "user", "content": prompt}
-            ],
-            "response_format": {"type": "json_object"}
+            ]
+            # Removed invalid response_format
         }
 
         try:
@@ -76,13 +76,19 @@ class JobIntelligence:
                 
             content = response.json()["choices"][0]["message"]["content"]
             
-            # Extract JSON
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-                
+            # Extract JSON from markdown if present
+            content = content.strip()
+            if "```" in content:
+                # Handle cases like ```json ... ``` or just ``` ... ```
+                content = content.split("```")[-2] # Get content between the last two sets of backticks
+                if content.startswith("json\n"):
+                    content = content[5:]
+                elif content.startswith("json"):
+                    content = content[4:]
+            
+            content = content.strip()
             jobs = json.loads(content)
+            
             if isinstance(jobs, dict):
                 for key in ["jobs", "data", "results"]:
                     if key in jobs and isinstance(jobs[key], list):
