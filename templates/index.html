@@ -215,7 +215,7 @@
 
             jobList.innerHTML = jobs.map((job, idx) => `
                 <div class="job-item animate-fade" style="animation-delay: ${idx * 0.1}s">
-                    <div class="score-badge" id="score-${idx}">--</div>
+                    <div class="score-badge" id="score-${idx}"><i class="fas fa-spinner fa-spin" style="font-size: 0.8rem;"></i></div>
                     <div class="job-title">${job.title}</div>
                     <div class="company-meta">${job.company} • ${job.location}</div>
                     <p class="requirements-text">${job.requirements || "Live requirements being summarized by AI..."}</p>
@@ -226,7 +226,7 @@
                         </a>
                         <button onclick="deepMatch(${idx}, '${job.title}', '${(job.requirements || "").replace(/'/g, "\\'")}')" 
                                 class="btn-secondary">
-                            <i class="fas fa-robot"></i> Deep Match Analysis
+                            <i class="fas fa-robot"></i> Full Analysis
                         </button>
                     </div>
                     
@@ -235,6 +235,13 @@
                     </div>
                 </div>
             `).join('');
+
+            // NEW: Automatically trigger match analysis for all jobs sequentially
+            jobs.forEach((job, idx) => {
+                setTimeout(() => {
+                    deepMatch(idx, job.title, job.requirements || "");
+                }, idx * 1000); // 1-second delay between each analysis to respect API safety
+            });
         }
 
         async function deepMatch(idx, title, desc) {

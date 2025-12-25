@@ -122,13 +122,29 @@ class JobIntelligence:
 
         try:
             response = self.client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
-            clean_content = response.text.replace("```json", "").replace("```", "").strip()
-            result = json.loads(clean_content)
+            content = response.text.strip()
+            
+            # Robust JSON extraction
+            if "```" in content:
+                content = content.split("```")[-2]
+                if content.startswith("json\n"):
+                    content = content[5:]
+                elif content.startswith("json"):
+                    content = content[4:]
+            
+            content = content.strip()
+            result = json.loads(content)
             self.cache.set(cache_key, result)
             return result
         except Exception as e:
-            logger.error(f"Gemini analysis failed: {e}")
-            return {"score": 0, "verdict": "Match analysis failed.", "strengths": [], "gaps": []}
+            logger.error(f"Gemini analysis failed: {str(e)}")
+            # Return a more descriptive failure to the UI
+            return {
+                "score": 0, 
+                "verdict": f"AI Matcher Error: {str(e)[:100]}", 
+                "strengths": ["Analysis failed"], 
+                "gaps": ["Check API Key/Quota"]
+            }
 
     def extract_search_profile(self, resume_text: str) -> Dict[str, Any]:
         """Analyzes a resume to extract multiple optimized job search queries."""
