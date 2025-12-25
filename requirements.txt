@@ -1,8 +1,9 @@
 flask
 python-dotenv
-google-generativeai
+google-genai
 requests
 pydantic
 pdfplumber
 python-docx
 pandas
+gunicorn

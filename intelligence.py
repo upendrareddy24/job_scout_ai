@@ -3,7 +3,7 @@ import json
 import logging
 import requests
 from typing import List, Dict, Any, Optional
-import google.generativeai as genai
+from google import genai
 from dotenv import load_dotenv
 from cache_manager import CacheManager
 
@@ -17,11 +17,8 @@ logger = logging.getLogger(__name__)
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-
 class JobIntelligence:
-    """Handles AI logic with caching and prompt optimization."""
+    """Handles AI logic with caching and prompt optimization using the new google-genai SDK."""
     
     def __init__(self):
         self.perplexity_url = "https://api.perplexity.ai/chat/completions"
@@ -30,6 +27,9 @@ class JobIntelligence:
             "Content-Type": "application/json"
         }
         self.cache = CacheManager()
+        self.client = None
+        if GEMINI_API_KEY:
+            self.client = genai.Client(api_key=GEMINI_API_KEY)
 
     def scout_jobs(self, search_query: str) -> List[Dict[str, Any]]:
         """Uses Perplexity to find real-time job listings in the USA (with caching)."""
@@ -82,7 +82,6 @@ class JobIntelligence:
 
     def analyze_match(self, resume_text: str, job_description: str) -> Dict[str, Any]:
         """Uses Gemini to calculate compatibility (with caching)."""
-        # Hash the inputs for a unique cache key
         import hashlib
         inputs_hash = hashlib.md5((resume_text + job_description).encode()).hexdigest()
         cache_key = f"match_{inputs_hash}"
@@ -92,10 +91,8 @@ class JobIntelligence:
             logger.info("Returning cached match analysis.")
             return cached_data
 
-        if not GEMINI_API_KEY:
+        if not self.client:
             return {"score": 50, "verdict": "Gemini key missing.", "strengths": [], "gaps": []}
-
-        model = genai.GenerativeModel('gemini-1.5-flash')
         
         prompt = f"""
         Analyze match between Resume and Job. 
@@ -105,14 +102,17 @@ class JobIntelligence:
         """
 
         try:
-            response = model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model='gemini-1.5-flash',
+                contents=prompt
+            )
             clean_content = response.text.replace("```json", "").replace("```", "").strip()
             result = json.loads(clean_content)
             self.cache.set(cache_key, result)
             return result
         except Exception as e:
             logger.error(f"Gemini analysis failed: {e}")
-            return {"score": 0, "verdict": "Match analysis failed.", "strengths": [], "gaps": []}
+            return {"score": 0, "verdict": f"Match analysis failed: {str(e)}", "strengths": [], "gaps": []}
 
     def extract_search_profile(self, resume_text: str) -> Dict[str, Any]:
         """Analyzes a resume to determine best search query (with caching)."""
@@ -124,14 +124,16 @@ class JobIntelligence:
         if cached_data:
             return cached_data
 
-        if not GEMINI_API_KEY:
+        if not self.client:
             return {"query": "Software Engineer", "location": "USA"}
 
-        model = genai.GenerativeModel('gemini-1.5-flash')
         prompt = f"Extract optimized job search query from Resume: {resume_text[:2000]}. Return JSON ONLY: {{ 'query': '...', 'location': '...' }}"
         
         try:
-            response = model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model='gemini-1.5-flash',
+                contents=prompt
+            )
             clean_content = response.text.replace("```json", "").replace("```", "").strip()
             result = json.loads(clean_content)
             self.cache.set(cache_key, result)

@@ -67,4 +67,4 @@ def analyze():
     return jsonify(match)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=int(os.getenv("PORT", 5011)))
+    app.run(debug=False, port=int(os.getenv("PORT", 5011)))
