@@ -107,9 +107,9 @@ class JobIntelligence:
             return []
 
     def analyze_match(self, resume_text: str, job_description: str) -> Dict[str, Any]:
-        """Uses Gemini to calculate compatibility."""
+        """Uses Gemini to calculate compatibility with robust parsing."""
         inputs_hash = hashlib.md5((resume_text + job_description).encode()).hexdigest()
-        cache_key = f"match_{inputs_hash}"
+        cache_key = f"match_v2_{inputs_hash}"
         
         cached_data = self.cache.get(cache_key)
         if cached_data:
@@ -118,7 +118,13 @@ class JobIntelligence:
         if not self.client:
             return {"score": 50, "verdict": "Gemini intelligence not active.", "strengths": [], "gaps": []}
         
-        prompt = f"Match Resume and Job. RESUME: {resume_text[:3000]} JOB: {job_description[:1500]}. Return JSON ONLY: {{ 'score': 0-100, 'verdict': '...', 'strengths': [], 'gaps': [] }}"
+        prompt = f"""
+        Act as a Lead AI Recruiter. Rank the match between this Resume and Job.
+        RESUME: {resume_text[:3500]}
+        JOB: {job_description[:1500]}
+        
+        Return JSON ONLY: {{ "score": 0-100, "verdict": "brief explanation", "strengths": ["s1", "s2", "s3"], "gaps": ["g1", "g2", "g3"] }}
+        """
 
         try:
             response = self.client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
@@ -127,58 +133,57 @@ class JobIntelligence:
             # Robust JSON extraction
             if "```" in content:
                 content = content.split("```")[-2]
-                if content.startswith("json\n"):
-                    content = content[5:]
-                elif content.startswith("json"):
-                    content = content[4:]
+                if content.startswith("json\n"): content = content[5:]
+                elif content.startswith("json"): content = content[4:]
             
-            content = content.strip()
-            result = json.loads(content)
+            result = json.loads(content.strip())
             self.cache.set(cache_key, result)
             return result
         except Exception as e:
-            logger.error(f"Gemini analysis failed: {str(e)}")
-            # Return a more descriptive failure to the UI
-            return {
-                "score": 0, 
-                "verdict": f"AI Matcher Error: {str(e)[:100]}", 
-                "strengths": ["Analysis failed"], 
-                "gaps": ["Check API Key/Quota"]
-            }
+            logger.error(f"Analysis Error: {e}")
+            return {"score": 0, "verdict": f"Analysis pending or failed: {str(e)[:100]}", "strengths": ["Wait for retry"], "gaps": ["API Quota"]}
 
     def extract_search_profile(self, resume_text: str) -> Dict[str, Any]:
         """Analyzes a resume to extract multiple optimized job search queries."""
         resume_hash = hashlib.md5(resume_text.encode()).hexdigest()
-        cache_key = f"profile_v2_{resume_hash}"
+        cache_key = f"profile_v3_{resume_hash}"
         
         cached_data = self.cache.get(cache_key)
         if cached_data:
             return cached_data
 
         if not self.client:
-            logger.warning("No Gemini client to extract search profile. Using generic fallback.")
-            return {"queries": ["Senior Functional Safety Engineer", "Safety Systems Architect", "ISO 26262 Engineer"], "location": "USA"}
+            return {"queries": ["Senior Functional Safety Engineer", "Safety Architect"], "location": "USA"}
 
         prompt = f"""
-        Analyze this resume and generate a recruitment profile.
-        RESUME: {resume_text[:4000]}
+        Analyze this resume: {resume_text[:4000]}
         
         Tasks:
-        1. Identify the candidate's exact current/past job titles.
-        2. Generate 5-7 highly specific "Optimized Search Queries" (3-5 words each) that would find high-paying matching jobs on LinkedIn/Indeed. 
-           - Include variations of their current role.
-           - Include roles they are qualified to "step up" into.
-        3. Suggest the most likely preferred location (Default to 'USA').
+        1. Identify the candidate's exact area of expertise (e.g., Automotive Functional Safety).
+        2. Generate EXACTLY 6-8 highly specific job search queries (queries) for USA.
+           - Include current level (e.g., Senior Functional Safety Engineer).
+           - Include specialized niches (e.g., ISO 26262 Engineer).
+           - Include 1-2 'step up' roles (e.g., Safety Manager).
+        3. Determine likely preferred location (Default 'USA').
         
-        Return JSON ONLY: {{ "queries": ["query 1", "query 2", ...], "location": "...", "primary_title": "..." }}
+        Return JSON ONLY: {{ "queries": ["query1", "query2", ...], "location": "...", "primary_title": "..." }}
         """
         
         try:
             response = self.client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
-            clean_content = response.text.replace("```json", "").replace("```", "").strip()
-            result = json.loads(clean_content)
+            content = response.text.strip()
+            if "```" in content:
+                content = content.split("```")[-2]
+                if content.startswith("json\n"): content = content[5:]
+                elif content.startswith("json"): content = content[4:]
+            
+            result = json.loads(content.strip())
+            # Ensure we ALWAYS have a list
+            if not result.get("queries") or not isinstance(result["queries"], list):
+                result["queries"] = [result.get("primary_title") or "Senior Functional Safety Engineer"]
+                
             self.cache.set(cache_key, result)
             return result
         except Exception as e:
-            logger.error(f"Search profile extraction failed: {e}")
+            logger.error(f"Profile Error: {e}")
             return {"queries": ["Senior Functional Safety Engineer"], "location": "USA"}
