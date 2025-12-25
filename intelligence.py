@@ -37,8 +37,9 @@ class JobIntelligence:
             logger.error("SDK Error: google-genai package not found or import failed.")
         elif GEMINI_API_KEY:
             try:
-                self.client = genai.Client(api_key=GEMINI_API_KEY)
-                logger.info("Gemini Client initialized successfully.")
+                # Explicitly set vertexai=False to use Gemini API (AI Studio) instead of Vertex AI
+                self.client = genai.Client(api_key=GEMINI_API_KEY, vertexai=False)
+                logger.info("Gemini Client initialized for AI Studio.")
             except Exception as e:
                 logger.error(f"Gemini Init Failed: {e}")
         else:
