@@ -1,0 +1,8 @@
+flask
+python-dotenv
+google-generativeai
+requests
+pydantic
+pdfplumber
+python-docx
+pandas

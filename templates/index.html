@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JobScout AI | Precision Job Matching</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='design.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="mesh-bg"></div>
+
+    <div class="container">
+        <header class="animate-fade">
+            <div class="logo-container">
+                <div class="logo-radar">
+                    <div class="radar-beam"></div>
+                    <i class="fas fa-crosshairs" style="color: var(--accent-primary); z-index: 1;"></i>
+                </div>
+                <h1 class="logo-text">JobScout AI</h1>
+            </div>
+            <nav>
+                <span class="tag"
+                    style="background: rgba(56, 189, 248, 0.1); color: var(--accent-primary); border: 1px solid rgba(56, 189, 248, 0.2);">
+                    <i class="fas fa-shield-halved"></i> Pro Logic Active
+                </span>
+            </nav>
+        </header>
+
+        <section class="scout-layout">
+            <!-- Sidebar: Intelligence Feed -->
+            <aside class="animate-fade">
+                <div class="card" style="margin-bottom: 2rem;">
+                    <h2 class="hero-title" style="font-size: 1.5rem;">Resume <span class="accent-text">Core</span></h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
+                        Synchronize your career DNA to begin the high-precision scan.
+                    </p>
+
+                    <div class="drop-zone" id="dropZone">
+                        <i class="fas fa-microchip"></i>
+                        <p style="font-weight: 700;">Drop AI-Ready Resume</p>
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">PDF • DOCX • Ready for
+                            parsing</span>
+                        <input type="file" id="fileInput" class="hidden" accept=".pdf,.docx">
+                    </div>
+
+                    <div id="resumeInfo" class="hidden animate-fade"
+                        style="margin-top: 1.5rem; padding: 1rem; background: rgba(16, 185, 129, 0.05); border-radius: 1rem; border: 1px solid rgba(16, 185, 129, 0.2);">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <i class="fas fa-check-circle" style="color: var(--success);"></i>
+                            <span id="fileNameDisplay"
+                                style="font-size: 0.85rem; font-weight: 600; color: var(--success);">Resume
+                                Loaded</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2 class="hero-title" style="font-size: 1.5rem;">Target <span class="accent-text">Search</span>
+                    </h2>
+                    <div style="margin-top: 1rem;">
+                        <input type="text" id="queryInput" placeholder="Optimizing search query..."
+                            style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); padding: 1.25rem; border-radius: 1rem; color: white; margin-bottom: 1.25rem; font-weight: 600;">
+
+                        <button class="btn-primary" id="scoutBtn">
+                            <i class="fas fa-bullseye"></i> Start Global Scan
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Panel: The Radar Results -->
+            <main id="radarDisplay" class="animate-fade">
+                <div class="card" style="min-height: 700px; position: relative; overflow: hidden;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; position: relative; z-index: 2;">
+                        <div>
+                            <h2 class="hero-title" style="font-size: 1.75rem;">Global <span
+                                    class="accent-text">Matches</span></h2>
+                            <p id="searchSummary" style="color: var(--text-secondary); font-size: 0.9rem;">Ready for
+                                search input...</p>
+                        </div>
+                        <div id="loader" class="hidden">
+                            <div class="pulse"
+                                style="width: 12px; height: 12px; background: var(--accent-primary); border-radius: 50%;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="jobList">
+                        <!-- Initial Scanning State -->
+                        <div style="text-align: center; padding: 8rem 0; opacity: 0.5;">
+                            <div class="logo-radar"
+                                style="width: 120px; height: 120px; margin: 0 auto 2rem auto; border-width: 4px; border-color: rgba(56, 189, 248, 0.2);">
+                                <div class="radar-beam" style="animation-duration: 4s;"></div>
+                                <i class="fas fa-wifi" style="font-size: 2rem;"></i>
+                            </div>
+                            <h3 style="font-weight: 800; font-size: 1.5rem; margin-bottom: 0.5rem;">Radar Standby</h3>
+                            <p style="color: var(--text-secondary);">Upload your resume to calibrate and find matches.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </section>
+    </div>
+
+    <!-- Modals or Overlays if needed -->
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const scoutBtn = document.getElementById('scoutBtn');
+        const queryInput = document.getElementById('queryInput');
+        const loader = document.getElementById('loader');
+        const jobList = document.getElementById('jobList');
+        const resumeInfo = document.getElementById('resumeInfo');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const searchSummary = document.getElementById('searchSummary');
+
+        let currentResumeText = "";
+
+        // Core Interaction: Upload
+        dropZone.onclick = () => fileInput.click();
+        fileInput.onchange = e => e.target.files[0] && handleFileUpload(e.target.files[0]);
+
+        dropZone.ondragover = e => { e.preventDefault(); dropZone.style.borderColor = "#0ea5e9"; };
+        dropZone.ondragleave = () => { dropZone.style.borderColor = "rgba(255,255,255,0.1)"; };
+        dropZone.ondrop = e => {
+            e.preventDefault();
+            if (e.dataTransfer.files[0]) handleFileUpload(e.dataTransfer.files[0]);
+        };
+
+        async function handleFileUpload(file) {
+            const formData = new FormData();
+            formData.append('resume', file);
+
+            loader.classList.remove('hidden');
+            fileNameDisplay.innerText = "Analyzing: " + file.name;
+
+            try {
+                const res = await axios.post('/api/upload_resume', formData);
+                currentResumeText = res.data.resume_text;
+                queryInput.value = res.data.suggested_query || "";
+                resumeInfo.classList.remove('hidden');
+                dropZone.style.opacity = "0.5";
+
+                // One-click behavior: Start scouting automatically after upload
+                setTimeout(() => scoutBtn.click(), 500);
+            } catch (err) {
+                alert("Deep analysis failed: " + err.message);
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+
+        // Core Interaction: Scouting
+        scoutBtn.onclick = async () => {
+            const query = queryInput.value;
+            if (!query) return alert("Please specify a target query for the scan.");
+
+            jobList.innerHTML = `
+                <div style="text-align: center; padding: 8rem 0;">
+                    <i class="fas fa-satellite-dish pulse" style="font-size: 3rem; color: var(--accent-primary); margin-bottom: 2rem;"></i>
+                    <h3 style="font-weight: 800;">Scanning Global Databases...</h3>
+                    <p style="color: var(--text-secondary);">Direct-application links are currently being parsed from live data.</p>
+                </div>
+            `;
+            loader.classList.remove('hidden');
+            searchSummary.innerText = "Scanning live web for '" + query + "'...";
+
+            try {
+                const res = await axios.post('/api/scout', { query, location: "USA" });
+                const jobs = res.data.jobs;
+                searchSummary.innerText = "Found " + (jobs ? jobs.length : 0) + " matches for your profile.";
+                renderJobs(jobs);
+            } catch (err) {
+                jobList.innerHTML = `<div class="card" style="border-color: var(--danger)"><h3>Scan Error</h3><p>${err.message}</p></div>`;
+            } finally {
+                loader.classList.add('hidden');
+            }
+        };
+
+        function renderJobs(jobs) {
+            if (!jobs || jobs.length === 0) {
+                jobList.innerHTML = '<div style="text-align:center; padding: 5rem;"><p>Zero matches found. Try widening your query.</p></div>';
+                return;
+            }
+
+            jobList.innerHTML = jobs.map((job, idx) => `
+                <div class="job-item animate-fade" style="animation-delay: ${idx * 0.1}s">
+                    <div class="score-badge" id="score-${idx}">--</div>
+                    <div class="job-title">${job.title}</div>
+                    <div class="company-meta">${job.company} • ${job.location}</div>
+                    <p class="requirements-text">${job.requirements || "Live requirements being summarized by AI..."}</p>
+                    
+                    <div class="action-bar">
+                        <a href="${job.url}" target="_blank" class="btn-primary" style="width: auto; padding: 0.6rem 1.5rem; font-size: 0.85rem;">
+                            <i class="fas fa-paper-plane"></i> Apply Direct
+                        </a>
+                        <button onclick="deepMatch(${idx}, '${job.title}', '${(job.requirements || "").replace(/'/g, "\\'")}')" 
+                                class="btn-secondary">
+                            <i class="fas fa-robot"></i> Deep Match Analysis
+                        </button>
+                    </div>
+                    
+                    <div id="analysis-${idx}" class="hidden match-analysis">
+                        <div id="verdict-${idx}" style="line-height: 1.5;"></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function deepMatch(idx, title, desc) {
+            if (!currentResumeText) return alert("Please sync your resume for precise compatibility matching.");
+
+            const analysisDiv = document.getElementById(`analysis-${idx}`);
+            const verdictP = document.getElementById(`verdict-${idx}`);
+            const scoreDiv = document.getElementById(`score-${idx}`);
+
+            analysisDiv.classList.remove('hidden');
+            verdictP.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consulting lead AI recruiter...';
+
+            try {
+                const res = await axios.post('/api/analyze', {
+                    resume_text: currentResumeText,
+                    job_description: `${title}\n${desc}`
+                });
+
+                scoreDiv.innerText = res.data.score + "%";
+                scoreDiv.style.borderColor = res.data.score > 80 ? 'var(--success)' : (res.data.score > 60 ? 'var(--warning)' : 'var(--danger)');
+                scoreDiv.style.color = res.data.score > 80 ? 'var(--success)' : (res.data.score > 60 ? 'var(--warning)' : 'var(--danger)');
+
+                verdictP.innerHTML = `
+                    <div style="margin-bottom: 0.75rem;"><strong>Verdict:</strong> ${res.data.verdict}</div>
+                    <div class="tag-list">
+                        ${res.data.strengths.map(s => `<span class="mini-tag" style="border-color: rgba(16, 185, 129, 0.3); color: var(--success); background: rgba(16, 185, 129, 0.05);">${s}</span>`).join('')}
+                    </div>
+                    <div class="tag-list" style="margin-top: 0.5rem;">
+                        ${res.data.gaps.map(g => `<span class="mini-tag" style="border-color: rgba(244, 63, 94, 0.3); color: var(--danger); background: rgba(244, 63, 94, 0.05);">${g}</span>`).join('')}
+                    </div>
+                `;
+            } catch (err) {
+                verdictP.innerText = "AI Analyst is temporarily unavailable. Check API keys.";
+            }
+        }
+    </script>
+</body>
+
+</html>
