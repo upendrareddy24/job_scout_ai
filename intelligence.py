@@ -65,7 +65,8 @@ class JobIntelligence:
             logger.error("Perplexity API key missing.")
             return []
 
-        prompt = f"Find the top 30 most recent USA job openings (posted in last 72h if possible) for: '{search_query}'. Return ONLY JSON list of objects. Format: [{{'title': '...', 'company': '...', 'location': '...', 'url': '...', 'requirements': '...', 'posted': '...'}}]"
+        # Reduced to 20 to ensure we stay under Heroku's 30s timeout limit.
+        prompt = f"Find the top 20 most recent USA job openings for: '{search_query}'. Return ONLY JSON list. Concise requirements (1 sentence). Format: [{{'title': '...', 'company': '...', 'location': '...', 'url': '...', 'requirements': '...', 'posted': '...'}}]"
 
         payload = {
             "model": "sonar",

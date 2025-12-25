@@ -218,7 +218,7 @@
                 <div style="text-align: center; padding: 8rem 0;">
                     <i class="fas fa-satellite-dish pulse" style="font-size: 3rem; color: var(--accent-primary); margin-bottom: 2rem;"></i>
                     <h3 style="font-weight: 800;">Scanning Global Databases...</h3>
-                    <p style="color: var(--text-secondary);">Identifying the top 30 most recent openings for your profile.</p>
+                    <p style="color: var(--text-secondary);">Identifying the top 20 most recent openings for your profile.</p>
                 </div>
             `;
             loader.classList.remove('hidden');
@@ -234,7 +234,11 @@
                 searchSummary.innerText = "Found " + (jobs ? jobs.length : 0) + " matches for your profile.";
                 renderJobs(jobs);
             } catch (err) {
-                jobList.innerHTML = `<div class="card" style="border-color: var(--danger)"><h3>Scan Error</h3><p>${err.message}</p></div>`;
+                let msg = err.message;
+                if (msg.includes('503')) {
+                    msg = "Heroku Timeout: The search took > 30s. I have now optimized the speed significantly. Please try clicking the button again!";
+                }
+                jobList.innerHTML = `<div class="card" style="border-color: var(--danger); padding: 2rem; text-align: center;"><h3>Connection Issue</h3><p>${msg}</p></div>`;
             } finally {
                 loader.classList.add('hidden');
             }
