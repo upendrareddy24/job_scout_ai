@@ -20,9 +20,10 @@ logger = logging.getLogger(__name__)
 # API Keys
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 class JobIntelligence:
-    """Handles AI logic with caching and robust logging."""
+    """Handles AI logic with caching and multi-model fallbacks."""
     
     def __init__(self):
         self.perplexity_url = "https://api.perplexity.ai/chat/completions"
@@ -32,18 +33,26 @@ class JobIntelligence:
         }
         self.cache = CacheManager()
         self.client = None
+        self.openai_client = None
         
+        # Initialize Gemini
         if not genai:
-            logger.error("SDK Error: google-genai package not found or import failed.")
+            logger.error("SDK Error: google-genai package not found.")
         elif GEMINI_API_KEY:
             try:
-                # Explicitly set vertexai=False to use Gemini API (AI Studio) instead of Vertex AI
                 self.client = genai.Client(api_key=GEMINI_API_KEY, vertexai=False)
-                logger.info("Gemini Client initialized for AI Studio.")
+                logger.info("Gemini Pro initialized.")
             except Exception as e:
                 logger.error(f"Gemini Init Failed: {e}")
-        else:
-            logger.warning("GEMINI_API_KEY not found in environment.")
+        
+        # Initialize OpenAI (Backup)
+        if OPENAI_API_KEY:
+            try:
+                from openai import OpenAI
+                self.openai_client = OpenAI(api_key=OPENAI_API_KEY)
+                logger.info("OpenAI Backup initialized.")
+            except Exception as e:
+                logger.error(f"OpenAI Init Failed: {e}")
 
     def scout_jobs(self, search_query: str) -> List[Dict[str, Any]]:
         """Uses Perplexity to find real-time job listings in the USA."""
@@ -107,37 +116,41 @@ class JobIntelligence:
             logger.error(f"Perplexity scouting failed: {str(e)}")
             return []
 
-    def _call_gemini(self, prompt: str, model_name: str = "gemini-1.5-flash-latest") -> str:
-        """Helper to call Gemini with fallbacks."""
-        if not self.client:
-            raise Exception("Gemini client not initialized.")
+    def _call_ai(self, prompt: str) -> str:
+        """Helper to call AI (Gemini first, OpenAI backup)."""
+        # 1. Try Gemini
+        if self.client:
+            try:
+                response = self.client.models.generate_content(model="gemini-1.5-flash-latest", contents=prompt)
+                return response.text
+            except Exception as e:
+                logger.warning(f"Gemini failed: {e}. Trying OpenAI backup...")
         
-        try:
-            # Attempt first with the primary model
-            response = self.client.models.generate_content(model=model_name, contents=prompt)
-            return response.text
-        except Exception as e:
-            if "404" in str(e) and model_name == "gemini-1.5-flash-latest":
-                logger.warning("gemini-1.5-flash-latest 404'd. Trying gemini-1.5-flash (stable)...")
-                try:
-                    response = self.client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
-                    return response.text
-                except Exception as e2:
-                    logger.error(f"Fallback call failed: {e2}")
-                    raise e2
-            raise e
+        # 2. Try OpenAI Backup
+        if self.openai_client:
+            try:
+                response = self.openai_client.chat.completions.create(
+                    model="gpt-4o-mini", # High speed/low cost for matching
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                logger.error(f"OpenAI backup failed: {e}")
+                raise e
+        
+        raise Exception("No AI providers available (Gemini/OpenAI failed or not configured).")
 
     def analyze_match(self, resume_text: str, job_description: str) -> Dict[str, Any]:
-        """Uses Gemini to calculate compatibility with robust parsing and fallbacks."""
+        """Uses AI to calculate compatibility with robust parsing and fallbacks."""
         inputs_hash = hashlib.md5((resume_text + job_description).encode()).hexdigest()
-        cache_key = f"match_v3_{inputs_hash}"
+        cache_key = f"match_v4_{inputs_hash}"
         
         cached_data = self.cache.get(cache_key)
         if cached_data:
             return cached_data
 
-        if not self.client:
-            return {"score": 50, "verdict": "Gemini intelligence not active.", "strengths": [], "gaps": []}
+        if not self.client and not self.openai_client:
+            return {"score": 50, "verdict": "Intelligence engine not active.", "strengths": [], "gaps": []}
         
         prompt = f"""
         Act as a Lead AI Recruiter. Rank the match between this Resume and Job.
@@ -148,7 +161,7 @@ class JobIntelligence:
         """
 
         try:
-            text = self._call_gemini(prompt)
+            text = self._call_ai(prompt)
             content = text.strip()
             
             # Robust JSON extraction
@@ -179,7 +192,7 @@ class JobIntelligence:
         if cached_data:
             return cached_data
 
-        if not self.client:
+        if not self.client and not self.openai_client:
             return {"queries": ["Senior Functional Safety Engineer", "Safety Architect"], "location": "USA"}
 
         prompt = f"""
@@ -191,7 +204,7 @@ class JobIntelligence:
         """
         
         try:
-            text = self._call_gemini(prompt)
+            text = self._call_ai(prompt)
             content = text.strip()
             if "```" in content:
                 content = content.split("```")[-2]
