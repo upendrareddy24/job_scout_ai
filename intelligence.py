@@ -79,7 +79,7 @@ class JobIntelligence:
 
         try:
             logger.info(f"Scouting for: {search_query}")
-            response = requests.post(self.perplexity_url, headers=self.perplexity_headers, json=payload, timeout=30)
+            response = requests.post(self.perplexity_url, headers=self.perplexity_headers, json=payload, timeout=25)
             
             if response.status_code != 200:
                 logger.error(f"Perplexity API Error {response.status_code}: {response.text}")
