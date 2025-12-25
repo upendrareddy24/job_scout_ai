@@ -74,6 +74,7 @@
                             <!-- New: Manual Entry -->
                             <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
                                 <input type="text" id="manualTitleInput" placeholder="+ Add title manually..."
+                                    onkeyup="if(event.key === 'Enter') addManualTitle()"
                                     style="flex: 1; background: rgba(255,255,255,0.05); border: 1px dashed var(--glass-border); padding: 0.5rem; border-radius: 0.5rem; color: white; font-size: 0.8rem;">
                                 <button onclick="addManualTitle()" class="btn-secondary"
                                     style="padding: 0.5rem; width: auto; font-size: 0.7rem;">
