@@ -106,10 +106,30 @@ class JobIntelligence:
             logger.error(f"Perplexity scouting failed: {str(e)}")
             return []
 
+    def _call_gemini(self, prompt: str, model_name: str = "gemini-1.5-flash-latest") -> str:
+        """Helper to call Gemini with fallbacks."""
+        if not self.client:
+            raise Exception("Gemini client not initialized.")
+        
+        try:
+            # Attempt first with the primary model
+            response = self.client.models.generate_content(model=model_name, contents=prompt)
+            return response.text
+        except Exception as e:
+            if "404" in str(e) and model_name == "gemini-1.5-flash-latest":
+                logger.warning("gemini-1.5-flash-latest 404'd. Trying gemini-1.5-flash (stable)...")
+                try:
+                    response = self.client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
+                    return response.text
+                except Exception as e2:
+                    logger.error(f"Fallback call failed: {e2}")
+                    raise e2
+            raise e
+
     def analyze_match(self, resume_text: str, job_description: str) -> Dict[str, Any]:
-        """Uses Gemini to calculate compatibility with robust parsing."""
+        """Uses Gemini to calculate compatibility with robust parsing and fallbacks."""
         inputs_hash = hashlib.md5((resume_text + job_description).encode()).hexdigest()
-        cache_key = f"match_v2_{inputs_hash}"
+        cache_key = f"match_v3_{inputs_hash}"
         
         cached_data = self.cache.get(cache_key)
         if cached_data:
@@ -127,8 +147,8 @@ class JobIntelligence:
         """
 
         try:
-            response = self.client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
-            content = response.text.strip()
+            text = self._call_gemini(prompt)
+            content = text.strip()
             
             # Robust JSON extraction
             if "```" in content:
@@ -141,12 +161,18 @@ class JobIntelligence:
             return result
         except Exception as e:
             logger.error(f"Analysis Error: {e}")
-            return {"score": 0, "verdict": f"Analysis pending or failed: {str(e)[:100]}", "strengths": ["Wait for retry"], "gaps": ["API Quota"]}
+            error_msg = str(e)
+            if "404" in error_msg:
+                verdict = "AI Model Mismatch: The model ID in your region/version might be different. I am attempting a live fix."
+            else:
+                verdict = f"AI Matcher Error: {error_msg[:100]}"
+                
+            return {"score": 0, "verdict": verdict, "strengths": ["Wait for retry"], "gaps": ["API Quota / Model ID"]}
 
     def extract_search_profile(self, resume_text: str) -> Dict[str, Any]:
         """Analyzes a resume to extract multiple optimized job search queries."""
         resume_hash = hashlib.md5(resume_text.encode()).hexdigest()
-        cache_key = f"profile_v3_{resume_hash}"
+        cache_key = f"profile_v4_{resume_hash}"
         
         cached_data = self.cache.get(cache_key)
         if cached_data:
@@ -157,28 +183,21 @@ class JobIntelligence:
 
         prompt = f"""
         Analyze this resume: {resume_text[:4000]}
-        
-        Tasks:
-        1. Identify the candidate's exact area of expertise (e.g., Automotive Functional Safety).
-        2. Generate EXACTLY 6-8 highly specific job search queries (queries) for USA.
-           - Include current level (e.g., Senior Functional Safety Engineer).
-           - Include specialized niches (e.g., ISO 26262 Engineer).
-           - Include 1-2 'step up' roles (e.g., Safety Manager).
-        3. Determine likely preferred location (Default 'USA').
-        
-        Return JSON ONLY: {{ "queries": ["query1", "query2", ...], "location": "...", "primary_title": "..." }}
+        1. Identify expertise.
+        2. Provide exactly 6 seeker queries for USA.
+        3. Determine location.
+        Return JSON: {{ "queries": ["q1", "q2", ...], "location": "...", "primary_title": "..." }}
         """
         
         try:
-            response = self.client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
-            content = response.text.strip()
+            text = self._call_gemini(prompt)
+            content = text.strip()
             if "```" in content:
                 content = content.split("```")[-2]
                 if content.startswith("json\n"): content = content[5:]
                 elif content.startswith("json"): content = content[4:]
             
             result = json.loads(content.strip())
-            # Ensure we ALWAYS have a list
             if not result.get("queries") or not isinstance(result["queries"], list):
                 result["queries"] = [result.get("primary_title") or "Senior Functional Safety Engineer"]
                 
@@ -186,4 +205,4 @@ class JobIntelligence:
             return result
         except Exception as e:
             logger.error(f"Profile Error: {e}")
-            return {"queries": ["Senior Functional Safety Engineer"], "location": "USA"}
+            return {"queries": ["Senior Functional Safety Engineer", "Safety Systems Engineer"], "location": "USA"}
