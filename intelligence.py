@@ -65,7 +65,7 @@ class JobIntelligence:
             logger.error("Perplexity API key missing.")
             return []
 
-        prompt = f"Find top 10 USA job openings for: '{search_query}'. Return ONLY JSON list of objects. Format: [{{'title': '...', 'company': '...', 'location': '...', 'url': '...', 'requirements': '...'}}]"
+        prompt = f"Find the top 30 most recent USA job openings (posted in last 72h if possible) for: '{search_query}'. Return ONLY JSON list of objects. Format: [{{'title': '...', 'company': '...', 'location': '...', 'url': '...', 'requirements': '...', 'posted': '...'}}]"
 
         payload = {
             "model": "sonar",

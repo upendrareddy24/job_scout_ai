@@ -70,6 +70,16 @@
                                 style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">
                                 AI Career Paths:</p>
                             <div id="suggestionsContainer" class="tag-list"></div>
+
+                            <!-- New: Manual Entry -->
+                            <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                                <input type="text" id="manualTitleInput" placeholder="+ Add title manually..."
+                                    style="flex: 1; background: rgba(255,255,255,0.05); border: 1px dashed var(--glass-border); padding: 0.5rem; border-radius: 0.5rem; color: white; font-size: 0.8rem;">
+                                <button onclick="addManualTitle()" class="btn-secondary"
+                                    style="padding: 0.5rem; width: auto; font-size: 0.7rem;">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
                         </div>
 
                         <button class="btn-primary" id="scoutBtn">
@@ -178,6 +188,24 @@
         function selectQuery(q) {
             queryInput.value = q;
             scoutBtn.click();
+        }
+
+        function addManualTitle() {
+            const input = document.getElementById('manualTitleInput');
+            const q = input.value.trim();
+            if (!q) return;
+
+            const container = document.getElementById('suggestionsContainer');
+            const newTag = document.createElement('span');
+            newTag.className = 'mini-tag';
+            newTag.style.cursor = 'pointer';
+            newTag.style.padding = '0.5rem 1rem';
+            newTag.style.borderColor = 'var(--accent-primary)';
+            newTag.innerHTML = q;
+            newTag.onclick = () => selectQuery(q);
+
+            container.appendChild(newTag);
+            input.value = "";
         }
 
         // Core Interaction: Scouting
