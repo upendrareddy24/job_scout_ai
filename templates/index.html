@@ -218,14 +218,18 @@
                 <div style="text-align: center; padding: 8rem 0;">
                     <i class="fas fa-satellite-dish pulse" style="font-size: 3rem; color: var(--accent-primary); margin-bottom: 2rem;"></i>
                     <h3 style="font-weight: 800;">Scanning Global Databases...</h3>
-                    <p style="color: var(--text-secondary);">Direct-application links are currently being parsed from live data.</p>
+                    <p style="color: var(--text-secondary);">Identifying the top 30 most recent openings for your profile.</p>
                 </div>
             `;
             loader.classList.remove('hidden');
             searchSummary.innerText = "Scanning live web for '" + query + "'...";
 
             try {
-                const res = await axios.post('/api/scout', { query, location: "USA" });
+                const res = await axios.post('/api/scout', {
+                    query,
+                    location: "USA",
+                    resume_text: currentResumeText
+                });
                 const jobs = res.data.jobs;
                 searchSummary.innerText = "Found " + (jobs ? jobs.length : 0) + " matches for your profile.";
                 renderJobs(jobs);
@@ -242,11 +246,20 @@
                 return;
             }
 
-            jobList.innerHTML = jobs.map((job, idx) => `
-                <div class="job-item animate-fade" style="animation-delay: ${idx * 0.1}s">
-                    <div class="score-badge" id="score-${idx}"><i class="fas fa-spinner fa-spin" style="font-size: 0.8rem;"></i></div>
+            // Sort jobs by local score to show best matches first
+            jobs.sort((a, b) => (b.local_score || 0) - (a.local_score || 0));
+
+            jobList.innerHTML = jobs.map((job, idx) => {
+                const initialScore = job.local_score || 0;
+                const scoreColor = initialScore > 75 ? 'var(--success)' : (initialScore > 50 ? 'var(--warning)' : 'var(--danger)');
+
+                return `
+                <div class="job-item animate-fade" style="animation-delay: ${idx * 0.05}s">
+                    <div class="score-badge" id="score-${idx}" style="border-color: ${scoreColor}; color: ${scoreColor};">
+                        ${initialScore}%
+                    </div>
                     <div class="job-title">${job.title}</div>
-                    <div class="company-meta">${job.company} • ${job.location}</div>
+                    <div class="company-meta">${job.company} • ${job.location} ${job.posted ? `• <span style="color: var(--accent-primary)">${job.posted}</span>` : ''}</div>
                     <p class="requirements-text">${job.requirements || "Live requirements being summarized by AI..."}</p>
                     
                     <div class="action-bar">
@@ -255,7 +268,7 @@
                         </a>
                         <button onclick="deepMatch(${idx}, '${job.title}', '${(job.requirements || "").replace(/'/g, "\\'")}')" 
                                 class="btn-secondary">
-                            <i class="fas fa-robot"></i> Full Analysis
+                            <i class="fas fa-robot"></i> Full Insight
                         </button>
                     </div>
                     
@@ -263,13 +276,13 @@
                         <div id="verdict-${idx}" style="line-height: 1.5;"></div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
 
-            // NEW: Automatically trigger match analysis for all jobs sequentially
-            jobs.forEach((job, idx) => {
+            // NEW: Automatically trigger deep analysis ONLY for top 5 to save quota
+            jobs.slice(0, 5).forEach((job, idx) => {
                 setTimeout(() => {
                     deepMatch(idx, job.title, job.requirements || "");
-                }, idx * 1000); // 1-second delay between each analysis to respect API safety
+                }, (idx + 1) * 2000); // 2-second stagger
             });
         }
 

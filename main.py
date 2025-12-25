@@ -48,14 +48,27 @@ def upload_resume():
 
 @app.route('/api/scout', methods=['POST'])
 def scout():
-    # In a full flow, we'd take a resume, extract query, then scout.
-    # For now, let's allow a manual query check too.
     data = request.json
     query = data.get('query', 'Software Engineer')
     location = data.get('location', 'USA')
+    resume_text = data.get('resume_text', '')
     
-    jobs = intel.scout_jobs(f"{query} in {location}")
-    return jsonify({"jobs": jobs})
+    raw_jobs = intel.scout_jobs(f"{query} in {location}")
+    
+    # Calculate local scores for instant UI updates
+    processed_jobs = []
+    for job in raw_jobs:
+        if resume_text:
+            job['local_score'] = intel.calculate_local_score(
+                resume_text, 
+                job.get('title', ''), 
+                job.get('requirements', '')
+            )
+        else:
+            job['local_score'] = 0
+        processed_jobs.append(job)
+        
+    return jsonify({"jobs": processed_jobs})
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze():

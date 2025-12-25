@@ -116,6 +116,44 @@ class JobIntelligence:
             logger.error(f"Perplexity scouting failed: {str(e)}")
             return []
 
+    def calculate_local_score(self, resume_text: str, job_title: str, job_desc: str) -> int:
+        """Calculates a match percentage locally using keyword density (Zero-API)."""
+        if not resume_text: return 0
+        
+        # Simple cleaning and tokenization
+        def clean(t):
+            t = t.lower()
+            for char in '.,!?;:()[]{}': t = t.replace(char, ' ')
+            return set(t.split())
+
+        res_tokens = clean(resume_text)
+        job_tokens = clean(f"{job_title} {job_desc}")
+        
+        if not job_tokens: return 0
+        
+        # 1. Tech Term Overlap (The "Signal")
+        intersection = res_tokens.intersection(job_tokens)
+        
+        # Filter intersection for meaningful words (len > 3)
+        meaningful_overlap = {t for t in intersection if len(t) > 3}
+        
+        # 2. Critical Keyword Boost (Titles & Domains)
+        title_words = clean(job_title)
+        title_boost = 0
+        for tw in title_words:
+            if len(tw) > 4 and tw in res_tokens:
+                title_boost += 15 # Heavy weight for title keywords
+        
+        # 3. Domain Specific Weights (ISO, Safety, Engineer, etc.)
+        domain_keywords = {'safety', 'functional', 'iso', 'sil', 'asil', 'engineer', 'embedded', 'automotive'}
+        domain_match = len(intersection.intersection(domain_keywords)) * 10
+        
+        # Final Score calculation
+        base_score = (len(meaningful_overlap) / max(len(job_tokens), 1)) * 400
+        total_score = min(95, int(base_score + title_boost + domain_match))
+        
+        return max(5, total_score) # Min 5% if tokens exist
+
     def _call_ai(self, prompt: str) -> str:
         """Helper to call AI (Gemini first, OpenAI backup)."""
         # 1. Try Gemini
