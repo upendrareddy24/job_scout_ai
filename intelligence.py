@@ -2,8 +2,12 @@ import os
 import json
 import logging
 import requests
+import hashlib
 from typing import List, Dict, Any, Optional
-from google import genai
+try:
+    from google import genai
+except ImportError:
+    genai = None
 from dotenv import load_dotenv
 from cache_manager import CacheManager
 
@@ -18,7 +22,7 @@ PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 class JobIntelligence:
-    """Handles AI logic with caching and prompt optimization using the new google-genai SDK."""
+    """Handles AI logic with caching and robust logging."""
     
     def __init__(self):
         self.perplexity_url = "https://api.perplexity.ai/chat/completions"
@@ -28,15 +32,23 @@ class JobIntelligence:
         }
         self.cache = CacheManager()
         self.client = None
-        if GEMINI_API_KEY:
-            self.client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        if not genai:
+            logger.error("SDK Error: google-genai package not found or import failed.")
+        elif GEMINI_API_KEY:
+            try:
+                self.client = genai.Client(api_key=GEMINI_API_KEY)
+                logger.info("Gemini Client initialized successfully.")
+            except Exception as e:
+                logger.error(f"Gemini Init Failed: {e}")
+        else:
+            logger.warning("GEMINI_API_KEY not found in environment.")
 
     def scout_jobs(self, search_query: str) -> List[Dict[str, Any]]:
-        """Uses Perplexity to find real-time job listings in the USA (with caching)."""
+        """Uses Perplexity to find real-time job listings in the USA."""
         cache_key = f"scout_{search_query}"
         cached_data = self.cache.get(cache_key)
         if cached_data:
-            logger.info(f"Returning cached jobs for: {search_query}")
             return cached_data
 
         if not PERPLEXITY_API_KEY:
@@ -55,11 +67,16 @@ class JobIntelligence:
         }
 
         try:
+            logger.info(f"Scouting for: {search_query}")
             response = requests.post(self.perplexity_url, headers=self.perplexity_headers, json=payload, timeout=30)
-            response.raise_for_status()
+            
+            if response.status_code != 200:
+                logger.error(f"Perplexity API Error {response.status_code}: {response.text}")
+                return []
+                
             content = response.json()["choices"][0]["message"]["content"]
             
-            # Perplexity might wrap JSON in backticks
+            # Extract JSON
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
             elif "```" in content:
@@ -68,55 +85,47 @@ class JobIntelligence:
             jobs = json.loads(content)
             if isinstance(jobs, dict):
                 for key in ["jobs", "data", "results"]:
-                    if key in jobs:
+                    if key in jobs and isinstance(jobs[key], list):
                         jobs = jobs[key]
                         break
             
             if isinstance(jobs, list):
+                logger.info(f"Found {len(jobs)} jobs via Perplexity.")
                 self.cache.set(cache_key, jobs)
                 return jobs
+            
+            logger.warning(f"Unexpected Perplexity format: {content}")
             return []
         except Exception as e:
-            logger.error(f"Perplexity scouting failed: {e}")
+            logger.error(f"Perplexity scouting failed: {str(e)}")
             return []
 
     def analyze_match(self, resume_text: str, job_description: str) -> Dict[str, Any]:
-        """Uses Gemini to calculate compatibility (with caching)."""
-        import hashlib
+        """Uses Gemini to calculate compatibility."""
         inputs_hash = hashlib.md5((resume_text + job_description).encode()).hexdigest()
         cache_key = f"match_{inputs_hash}"
         
         cached_data = self.cache.get(cache_key)
         if cached_data:
-            logger.info("Returning cached match analysis.")
             return cached_data
 
         if not self.client:
-            return {"score": 50, "verdict": "Gemini key missing.", "strengths": [], "gaps": []}
+            return {"score": 50, "verdict": "Gemini intelligence not active.", "strengths": [], "gaps": []}
         
-        prompt = f"""
-        Analyze match between Resume and Job. 
-        RESUME: {resume_text[:2000]} 
-        JOB: {job_description[:1000]}
-        Return JSON ONLY: {{ "score": 0-100, "verdict": "brief text", "strengths": ["s1", "s2", "s3"], "gaps": ["g1", "g2", "g3"] }}
-        """
+        prompt = f"Match Resume and Job. RESUME: {resume_text[:3000]} JOB: {job_description[:1500]}. Return JSON ONLY: {{ 'score': 0-100, 'verdict': '...', 'strengths': [], 'gaps': [] }}"
 
         try:
-            response = self.client.models.generate_content(
-                model='gemini-1.5-flash',
-                contents=prompt
-            )
+            response = self.client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
             clean_content = response.text.replace("```json", "").replace("```", "").strip()
             result = json.loads(clean_content)
             self.cache.set(cache_key, result)
             return result
         except Exception as e:
             logger.error(f"Gemini analysis failed: {e}")
-            return {"score": 0, "verdict": f"Match analysis failed: {str(e)}", "strengths": [], "gaps": []}
+            return {"score": 0, "verdict": "Match analysis failed.", "strengths": [], "gaps": []}
 
     def extract_search_profile(self, resume_text: str) -> Dict[str, Any]:
-        """Analyzes a resume to determine best search query (with caching)."""
-        import hashlib
+        """Analyzes a resume to determine best search query."""
         resume_hash = hashlib.md5(resume_text.encode()).hexdigest()
         cache_key = f"profile_{resume_hash}"
         
@@ -125,19 +134,17 @@ class JobIntelligence:
             return cached_data
 
         if not self.client:
-            return {"query": "Software Engineer", "location": "USA"}
+            logger.warning("No Gemini client to extract search profile. Using generic fallback.")
+            return {"query": "Senior Functional Safety Engineer", "location": "USA"}
 
-        prompt = f"Extract optimized job search query from Resume: {resume_text[:2000]}. Return JSON ONLY: {{ 'query': '...', 'location': '...' }}"
+        prompt = f"Identify the BEST job search query (3-5 words) and location from this resume: {resume_text[:3000]}. Return JSON ONLY: {{ 'query': '...', 'location': '...' }}"
         
         try:
-            response = self.client.models.generate_content(
-                model='gemini-1.5-flash',
-                contents=prompt
-            )
+            response = self.client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
             clean_content = response.text.replace("```json", "").replace("```", "").strip()
             result = json.loads(clean_content)
             self.cache.set(cache_key, result)
             return result
         except Exception as e:
             logger.error(f"Search profile extraction failed: {e}")
-            return {"query": "Software Engineer", "location": "USA"}
+            return {"query": "Senior Functional Safety Engineer", "location": "USA"}
