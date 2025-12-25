@@ -126,8 +126,6 @@
         </section>
     </div>
 
-    <!-- Modals or Overlays if needed -->
-
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
         const dropZone = document.getElementById('dropZone');
@@ -142,7 +140,6 @@
 
         let currentResumeText = "";
 
-        // Core Interaction: Upload
         dropZone.onclick = () => fileInput.click();
         fileInput.onchange = e => e.target.files[0] && handleFileUpload(e.target.files[0]);
 
@@ -156,7 +153,6 @@
         async function handleFileUpload(file) {
             const formData = new FormData();
             formData.append('resume', file);
-
             loader.classList.remove('hidden');
             fileNameDisplay.innerText = "Analyzing: " + file.name;
 
@@ -164,7 +160,6 @@
                 const res = await axios.post('/api/upload_resume', formData);
                 currentResumeText = res.data.resume_text;
 
-                // Render suggestions
                 const queries = res.data.suggested_queries || [];
                 const suggestionsHtml = queries.map(q => `
                     <span class="mini-tag" style="cursor:pointer; padding: 0.5rem 1rem; border-color: var(--accent-primary);"
@@ -175,7 +170,6 @@
 
                 document.getElementById('suggestionsContainer').innerHTML = suggestionsHtml;
                 document.getElementById('suggestionsBox').classList.remove('hidden');
-
                 queryInput.value = res.data.suggested_query || "";
                 resumeInfo.classList.remove('hidden');
                 dropZone.style.opacity = "0.5";
@@ -209,10 +203,9 @@
             input.value = "";
         }
 
-        // Core Interaction: Scouting
         scoutBtn.onclick = async () => {
             const query = queryInput.value;
-            if (!query) return alert("Please specify a target query for the scan.");
+            if (!query) return alert("Please specify a target query.");
 
             jobList.innerHTML = `
                 <div style="text-align: center; padding: 8rem 0;">
@@ -222,7 +215,6 @@
                 </div>
             `;
             loader.classList.remove('hidden');
-            searchSummary.innerText = "Scanning live web for '" + query + "'...";
 
             try {
                 const res = await axios.post('/api/scout', {
@@ -235,9 +227,7 @@
                 renderJobs(jobs);
             } catch (err) {
                 let msg = err.message;
-                if (msg.includes('503')) {
-                    msg = "Heroku Timeout: The search took > 30s. I have now optimized the speed significantly. Please try clicking the button again!";
-                }
+                if (msg.includes('503')) msg = "Heroku Timeout: Optimized for 20 jobs. Try again!";
                 jobList.innerHTML = `<div class="card" style="border-color: var(--danger); padding: 2rem; text-align: center;"><h3>Connection Issue</h3><p>${msg}</p></div>`;
             } finally {
                 loader.classList.add('hidden');
@@ -246,11 +236,10 @@
 
         function renderJobs(jobs) {
             if (!jobs || jobs.length === 0) {
-                jobList.innerHTML = '<div style="text-align:center; padding: 5rem;"><p>Zero matches found. Try widening your query.</p></div>';
+                jobList.innerHTML = '<div style="text-align:center; padding: 5rem;"><p>Zero matches found.</p></div>';
                 return;
             }
 
-            // Sort jobs by local score to show best matches first
             jobs.sort((a, b) => (b.local_score || 0) - (a.local_score || 0));
 
             jobList.innerHTML = jobs.map((job, idx) => {
@@ -270,7 +259,7 @@
                         <a href="${job.url}" target="_blank" class="btn-primary" style="width: auto; padding: 0.6rem 1.5rem; font-size: 0.85rem;">
                             <i class="fas fa-paper-plane"></i> Apply Direct
                         </a>
-                        <button onclick="deepMatch(${idx}, '${job.title}', '${(job.requirements || "").replace(/'/g, "\\'")}')" 
+                        <button onclick="deepMatch(${idx}, '${job.title}', '${(job.requirements || "").replace(/'/g, "\\'").replace(/"/g, "&quot;")}')" 
                                 class="btn-secondary">
                             <i class="fas fa-robot"></i> Full Insight
                         </button>
@@ -281,46 +270,49 @@
                     </div>
                 </div>
             `}).join('');
-
-            // NEW: Automatically trigger deep analysis ONLY for top 5 to save quota
-            jobs.slice(0, 5).forEach((job, idx) => {
-                setTimeout(() => {
-                    deepMatch(idx, job.title, job.requirements || "");
-                }, (idx + 1) * 2000); // 2-second stagger
-            });
         }
 
         async function deepMatch(idx, title, desc) {
-            if (!currentResumeText) return alert("Please sync your resume for precise compatibility matching.");
-
             const analysisDiv = document.getElementById(`analysis-${idx}`);
             const verdictP = document.getElementById(`verdict-${idx}`);
-            const scoreDiv = document.getElementById(`score-${idx}`);
-
             analysisDiv.classList.remove('hidden');
-            verdictP.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consulting lead AI recruiter...';
+            verdictP.innerHTML = `
+                <div style="padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem; border: 1px solid var(--glass-border);">
+                    <i class="fas fa-circle-notch fa-spin" style="margin-right: 0.5rem; color: var(--accent-primary)"></i>
+                    <span style="font-size: 0.85rem; color: var(--text-secondary)">Using AI to generate detailed breakdown...</span>
+                </div>
+            `;
 
             try {
                 const res = await axios.post('/api/analyze', {
                     resume_text: currentResumeText,
                     job_description: `${title}\n${desc}`
                 });
-
-                scoreDiv.innerText = res.data.score + "%";
-                scoreDiv.style.borderColor = res.data.score > 80 ? 'var(--success)' : (res.data.score > 60 ? 'var(--warning)' : 'var(--danger)');
-                scoreDiv.style.color = res.data.score > 80 ? 'var(--success)' : (res.data.score > 60 ? 'var(--warning)' : 'var(--danger)');
-
+                const data = res.data;
                 verdictP.innerHTML = `
-                    <div style="margin-bottom: 0.75rem;"><strong>Verdict:</strong> ${res.data.verdict}</div>
-                    <div class="tag-list">
-                        ${res.data.strengths.map(s => `<span class="mini-tag" style="border-color: rgba(16, 185, 129, 0.3); color: var(--success); background: rgba(16, 185, 129, 0.05);">${s}</span>`).join('')}
-                    </div>
-                    <div class="tag-list" style="margin-top: 0.5rem;">
-                        ${res.data.gaps.map(g => `<span class="mini-tag" style="border-color: rgba(244, 63, 94, 0.3); color: var(--danger); background: rgba(244, 63, 94, 0.05);">${g}</span>`).join('')}
+                    <div class="animate-fade">
+                        <div style="font-weight: 700; color: var(--accent-primary); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-check-circle"></i> AI Detailed Verdict
+                        </div>
+                        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">${data.verdict}</p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div>
+                                <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--success); font-weight: 800; margin-bottom: 0.5rem;">Strengths</div>
+                                <ul style="padding-left: 1.25rem; font-size: 0.8rem; color: var(--text-secondary);">
+                                    ${data.strengths.map(s => `<li>${s}</li>`).join('')}
+                                </ul>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--warning); font-weight: 800; margin-bottom: 0.5rem;">Gaps</div>
+                                <ul style="padding-left: 1.25rem; font-size: 0.8rem; color: var(--text-secondary);">
+                                    ${data.gaps.map(g => `<li>${g}</li>`).join('')}
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 `;
             } catch (err) {
-                verdictP.innerText = "AI Analyst is temporarily unavailable. Check API keys.";
+                verdictP.innerHTML = `<div style="color: var(--danger); font-size: 0.85rem; padding: 1rem; border: 1px solid var(--danger); border-radius: 0.5rem;">AI Service Busy. Use local rating. Details failed: ${err.message}</div>`;
             }
         }
     </script>

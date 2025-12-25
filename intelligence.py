@@ -118,42 +118,43 @@ class JobIntelligence:
             return []
 
     def calculate_local_score(self, resume_text: str, job_title: str, job_desc: str) -> int:
-        """Calculates a match percentage locally using keyword density (Zero-API)."""
-        if not resume_text: return 0
+        """Calculates a match percentage locally using weighted token analysis (Zero-API)."""
+        if not resume_text or not job_title: return 0
         
-        # Simple cleaning and tokenization
-        def clean(t):
-            t = t.lower()
-            for char in '.,!?;:()[]{}': t = t.replace(char, ' ')
-            return set(t.split())
+        import re
+        def get_tokens(text):
+            # Extract words, lowercase, and keep tokens > 3 chars
+            return set(re.findall(r'\w+', text.lower()))
 
-        res_tokens = clean(resume_text)
-        job_tokens = clean(f"{job_title} {job_desc}")
+        res_tokens = get_tokens(resume_text)
+        title_tokens = get_tokens(job_title)
+        desc_tokens = get_tokens(job_desc)
         
-        if not job_tokens: return 0
+        if not title_tokens: return 0
         
-        # 1. Tech Term Overlap (The "Signal")
-        intersection = res_tokens.intersection(job_tokens)
+        # 1. Title Match (The "Perfect Fit" Signal) - Weight: 60%
+        # Matches in title are much more important than description
+        title_hits = title_tokens.intersection(res_tokens)
+        title_score = min(60, len({t for t in title_hits if len(t) > 3}) * 20)
         
-        # Filter intersection for meaningful words (len > 3)
-        meaningful_overlap = {t for t in intersection if len(t) > 3}
+        # 2. Technical Keyword Overlap (The "Experience" Signal) - Weight: 40%
+        # Matches in job requirements/description
+        tech_hits = desc_tokens.intersection(res_tokens)
+        # Filter for meaningful tech/action words (avoiding very common ones)
+        meaningful_tech = {t for t in tech_hits if len(t) > 4}
+        tech_score = min(40, len(meaningful_tech) * 4)
         
-        # 2. Critical Keyword Boost (Titles & Domains)
-        title_words = clean(job_title)
-        title_boost = 0
-        for tw in title_words:
-            if len(tw) > 4 and tw in res_tokens:
-                title_boost += 15 # Heavy weight for title keywords
+        # 3. Domain Bonus (Hand-picked high-value keywords for your profile)
+        domain_keywords = {'safety', 'functional', 'iso', 'sil', 'asil', 'avionics', 'embedded', 'battery', 'hardware', 'software'}
+        domain_hits = title_tokens.union(desc_tokens).intersection(domain_keywords).intersection(res_tokens)
+        domain_bonus = len(domain_hits) * 5
         
-        # 3. Domain Specific Weights (ISO, Safety, Engineer, etc.)
-        domain_keywords = {'safety', 'functional', 'iso', 'sil', 'asil', 'engineer', 'embedded', 'automotive'}
-        domain_match = len(intersection.intersection(domain_keywords)) * 10
+        total = title_score + tech_score + domain_bonus
         
-        # Final Score calculation
-        base_score = (len(meaningful_overlap) / max(len(job_tokens), 1)) * 400
-        total_score = min(95, int(base_score + title_boost + domain_match))
+        # Sanity check: if it's a complete mismatch, floor it
+        if total < 10: return 5
         
-        return max(5, total_score) # Min 5% if tokens exist
+        return min(95, total)
 
     def _call_ai(self, prompt: str) -> str:
         """Helper to call AI (Gemini first, OpenAI backup)."""
