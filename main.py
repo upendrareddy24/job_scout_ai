@@ -6,6 +6,10 @@ from dotenv import load_dotenv
 from intelligence import JobIntelligence
 from resume_parser import ResumeParser
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 
 app = Flask(__name__)
