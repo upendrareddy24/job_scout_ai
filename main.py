@@ -16,6 +16,14 @@ parser = ResumeParser()
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Initialize Hunter's Memory (Expert Database)
+try:
+    import database
+    db = database.get_db()
+    logger.info("Hunter's Memory initialized.")
+except Exception as e:
+    logger.error(f"Database Init Failed: {e}")
+
 @app.route('/')
 def index():
     return render_template('index.html')

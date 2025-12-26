@@ -55,12 +55,46 @@ class JobIntelligence:
                 logger.error(f"OpenAI Init Failed: {e}")
 
     def scout_jobs(self, search_query: str) -> List[Dict[str, Any]]:
-        """Uses Perplexity to find real-time job listings in the USA."""
-        cache_key = f"scout_{search_query}"
+        """Uses Expert Hunter (JobAggregator) with Perplexity fallback."""
+        cache_key = f"scout_v5_{search_query}"
         cached_data = self.cache.get(cache_key)
         if cached_data:
             return cached_data
 
+        # NEW: use the Expert Hunter (Scrapers + JSearch API)
+        try:
+            from job_scrapers import JobAggregator
+            aggregator = JobAggregator()
+            
+            # Parse search query (it usually comes in as "Title in Location")
+            parts = search_query.split(" in ")
+            title = parts[0]
+            location = parts[1] if len(parts) > 1 else "USA"
+            
+            logger.info(f"Expert Hunting for: {title} in {location}")
+            jobs = aggregator.search_all_platforms(title, location, limit_per_platform=20)
+            
+            if jobs:
+                # Convert to Perplexity-style format for UI compatibility if needed
+                # (Assuming JobAggregator format is already close enough)
+                formatted_jobs = []
+                for j in jobs:
+                    formatted_jobs.append({
+                        "title": j.get("title", ""),
+                        "company": j.get("company", ""),
+                        "location": j.get("location", ""),
+                        "url": j.get("url", ""),
+                        "requirements": j.get("description", "")[:200] + "...",
+                        "posted": j.get("posted_date", "Recently")
+                    })
+                
+                self.cache.set(cache_key, formatted_jobs)
+                return formatted_jobs
+                
+        except Exception as e:
+            logger.error(f"Expert Hunter failed: {e}. Falling back to Perplexity.")
+
+        # FALLBACK: Perplexity
         if not PERPLEXITY_API_KEY:
             logger.error("Perplexity API key missing.")
             return []
