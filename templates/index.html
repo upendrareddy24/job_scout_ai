@@ -162,9 +162,9 @@
 
                 const queries = res.data.suggested_queries || [];
                 const suggestionsHtml = queries.map(q => `
-                    <span class="mini-tag" style="cursor:pointer; padding: 0.5rem 1rem; border-color: var(--accent-primary);"
-                          onclick="selectQuery('${q.replace(/'/g, "\\'")}')">
+                    <span class="mini-tag" onclick="selectQuery('${q.replace(/'/g, "\\'")}')">
                         ${q}
+                        <i class="fas fa-times delete-tag" onclick="removeTag(event, this.parentElement)"></i>
                     </span>
                 `).join('');
 
@@ -180,6 +180,13 @@
             }
         }
 
+        function removeTag(event, element) {
+            event.stopPropagation();
+            element.classList.add('animate-fade');
+            element.style.opacity = '0';
+            setTimeout(() => element.remove(), 300);
+        }
+
         function selectQuery(q) {
             queryInput.value = q;
             scoutBtn.click();
@@ -192,12 +199,12 @@
 
             const container = document.getElementById('suggestionsContainer');
             const newTag = document.createElement('span');
-            newTag.className = 'mini-tag';
-            newTag.style.cursor = 'pointer';
-            newTag.style.padding = '0.5rem 1rem';
-            newTag.style.borderColor = 'var(--accent-primary)';
-            newTag.innerHTML = q;
+            newTag.className = 'mini-tag animate-fade';
             newTag.onclick = () => selectQuery(q);
+            newTag.innerHTML = `
+                ${q}
+                <i class="fas fa-times delete-tag" onclick="removeTag(event, this.parentElement)"></i>
+            `;
 
             container.appendChild(newTag);
             input.value = "";

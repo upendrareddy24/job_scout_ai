@@ -297,10 +297,35 @@ header {
 
 .mini-tag {
     font-size: 0.75rem;
-    padding: 0.2rem 0.6rem;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.05);
+    padding: 0.4rem 0.8rem;
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.03);
     color: var(--text-secondary);
+    border: 1px solid var(--glass-border);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    transition: all 0.2s ease;
+}
+
+.mini-tag:hover {
+    border-color: var(--accent-primary);
+    background: rgba(14, 165, 233, 0.1);
+    color: white;
+}
+
+.delete-tag {
+    opacity: 0.4;
+    transition: all 0.2s;
+    font-size: 0.7rem;
+    padding: 0.2rem;
+}
+
+.delete-tag:hover {
+    opacity: 1;
+    color: var(--danger);
+    transform: scale(1.2);
 }
 
 /* Utilities */
