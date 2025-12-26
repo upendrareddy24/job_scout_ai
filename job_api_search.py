@@ -9,6 +9,7 @@ import requests
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 import config
+import database
 
 load_dotenv()
 logger = logging.getLogger(__name__)
